@@ -54,12 +54,14 @@ import seaborn as sns
 from pathlib import Path
 from datetime import datetime
 import argparse
+import random
 
 
 def get_mask_area(path_to_image: Path) -> float:
     """Return the area of the white pixels in a mask in microns"""
-    image = cv2.imread(str(path_to_image), 0)
-    num_of_pixels = cv2.countNonZero(image)
+    # image = cv2.imread(str(path_to_image), 0)
+    # num_of_pixels = cv2.countNonZero(image)
+    num_of_pixels = random.randrange(50)
     area_of_pixel = 4.92843e-05  # mm^2
     mask_area = area_of_pixel * num_of_pixels  # mm^2
     mask_area_microns = mask_area * 1000
@@ -222,6 +224,83 @@ def plot_data(base_directory: Path):
         plt.show()
 
 
+def create_rename_translation(base_directory: Path):
+    for directory in get_list_of_subdirectories(base_directory):
+        for subdirectory in get_list_of_subdirectories(directory):
+            rename_csv = (
+                f"{directory.name}_{subdirectory.name}_rename.csv".lower().replace(
+                    " ", ""
+                )
+            )
+            rename_csv_path = directory / rename_csv
+
+            image_paths = list(subdirectory.rglob("*.jpg"))
+            if image_paths:
+                data = []
+                for image in image_paths:
+                    area = get_mask_area(image)
+                    image_data = {"original_path": image, "area": area}
+                    data.append(image_data)
+
+                images_df = pd.DataFrame(data)
+                images_df.sort_values("area", inplace=True, ascending=False)
+                images_df["rank"] = (
+                    images_df["area"].rank(ascending=False, method="first").astype(int)
+                )
+                images_df["updated_path"] = images_df.apply(
+                    lambda row: Path(row["original_path"]).parent
+                    / f"{row['rank']}.jpg",
+                    axis=1,
+                )
+                images_df.to_csv(rename_csv_path, index=False)
+
+
+def rename_to_ranked(base_directory: Path):
+    for directory in get_list_of_subdirectories(base_directory):
+        csvs = [
+            csv
+            for csv in directory.iterdir()
+            if csv.suffix == ".csv" and "rename" in csv.stem
+        ]
+
+        for csv in csvs:
+            df = pd.read_csv(csv)
+            for _, row in df.iterrows():
+                original_path = Path(row["original_path"])
+                updated_path = Path(row["updated_path"])
+
+                try:
+                    original_path.rename(updated_path)
+                    print(f"Renamed: {original_path} -> {updated_path}")
+                except FileNotFoundError:
+                    print(f"File not found: {original_path}")
+                except FileExistsError:
+                    print(f"File already exists: {updated_path}")
+
+
+def rename_to_original(base_directory: Path):
+    for directory in get_list_of_subdirectories(base_directory):
+        csvs = [
+            csv
+            for csv in directory.iterdir()
+            if csv.suffix == ".csv" and "rename" in csv.stem
+        ]
+
+        for csv in csvs:
+            df = pd.read_csv(csv)
+            for _, row in df.iterrows():
+                original_path = Path(row["original_path"])
+                updated_path = Path(row["updated_path"])
+
+                try:
+                    updated_path.rename(original_path)
+                    print(f"Renamed: {updated_path} -> {original_path}")
+                except FileNotFoundError:
+                    print(f"File not found: {updated_path}")
+                except FileExistsError:
+                    print(f"File already exists: {original_path}")
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
@@ -231,7 +310,7 @@ def parse_arguments() -> argparse.Namespace:
         "base_directory",
         type=Path,
         nargs="?",
-        default=Path("Data"),
+        default=Path("test_data"),
         help="The base directory containing experiment subdirectories.",
     )
     parser.add_argument(
@@ -244,5 +323,7 @@ def parse_arguments() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_arguments()
-    create_csvs(base_directory=args.base_directory, force_update=args.force_update)
-    plot_data(args.base_directory)
+    create_rename_translation(base_directory=args.base_directory)
+    rename_to_ranked(base_directory=args.base_directory)
+    # create_csvs(base_directory=args.base_directory, force_update=args.force_update)
+    # plot_data(args.base_directory)
