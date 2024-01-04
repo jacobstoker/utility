@@ -54,14 +54,12 @@ import seaborn as sns
 from pathlib import Path
 from datetime import datetime
 import argparse
-import random
 
 
 def get_mask_area(path_to_image: Path) -> float:
     """Return the area of the white pixels in a mask in microns"""
-    # image = cv2.imread(str(path_to_image), 0)
-    # num_of_pixels = cv2.countNonZero(image)
-    num_of_pixels = random.randrange(50)
+    image = cv2.imread(str(path_to_image), 0)
+    num_of_pixels = cv2.countNonZero(image)
     area_of_pixel = 4.92843e-05  # mm^2
     mask_area = area_of_pixel * num_of_pixels  # mm^2
     mask_area_microns = mask_area * 1000
@@ -293,30 +291,6 @@ def rename_files(base_directory: Path, start_col: str, end_col: str):
                     print(f"File already exists: {updated_path}")
 
 
-def rename_to_original(base_directory: Path):
-    """Rename the files back to their original names, from the ranked area namings"""
-    for directory in get_list_of_subdirectories(base_directory):
-        csvs = [
-            csv
-            for csv in directory.iterdir()
-            if csv.suffix == ".csv" and "rename" in csv.stem
-        ]
-
-        for csv in csvs:
-            df = pd.read_csv(csv)
-            for _, row in df.iterrows():
-                original_path = Path(row["original_path"])
-                updated_path = Path(row["updated_path"])
-
-                try:
-                    updated_path.rename(original_path)
-                    print(f"Renamed: {updated_path} -> {original_path}")
-                except FileNotFoundError:
-                    print(f"File not found: {updated_path}")
-                except FileExistsError:
-                    print(f"File already exists: {original_path}")
-
-
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
@@ -346,7 +320,16 @@ if __name__ == "__main__":
     args = parse_arguments()
     if args.sort_by_area:
         create_rename_translation(base_directory=args.base_directory)
-        rename_to_ranked(base_directory=args.base_directory)
+        rename_files(
+            base_directory=args.base_directory,
+            start_col="original_path",
+            end_col="updated_path",
+        )
     else:
+        rename_files(
+            base_directory=args.base_directory,
+            start_col="updated_path",
+            end_col="original_path",
+        )
         create_csvs(base_directory=args.base_directory, force_update=args.force_update)
         plot_data(args.base_directory)
