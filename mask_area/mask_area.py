@@ -225,6 +225,10 @@ def plot_data(base_directory: Path):
 
 
 def create_rename_translation(base_directory: Path):
+    """
+    Create a CSV file with original filenames, and filenames that are ascending numbers based on the mask area.
+    Useful to be able to sort the images by the largest masks, so they can be visually inspected and erroneous ones can be deleted
+    """
     for directory in get_list_of_subdirectories(base_directory):
         for subdirectory in get_list_of_subdirectories(directory):
             rename_csv = (
@@ -255,7 +259,10 @@ def create_rename_translation(base_directory: Path):
                 images_df.to_csv(rename_csv_path, index=False)
 
 
-def rename_to_ranked(base_directory: Path):
+def rename_files(base_directory: Path, start_col: str, end_col: str):
+    """
+    - Find all *_rename.csv files, and rename the files inside based on the start/end_col values
+    """
     for directory in get_list_of_subdirectories(base_directory):
         csvs = [
             csv
@@ -265,9 +272,17 @@ def rename_to_ranked(base_directory: Path):
 
         for csv in csvs:
             df = pd.read_csv(csv)
+            missing_columns = [
+                col for col in [start_col, end_col] if col not in df.columns
+            ]
+            if missing_columns:
+                raise ValueError(
+                    f"Columns {', '.join(missing_columns)} not found in {csv}."
+                )
+
             for _, row in df.iterrows():
-                original_path = Path(row["original_path"])
-                updated_path = Path(row["updated_path"])
+                original_path = Path(row[start_col])
+                updated_path = Path(row[end_col])
 
                 try:
                     original_path.rename(updated_path)
@@ -279,6 +294,7 @@ def rename_to_ranked(base_directory: Path):
 
 
 def rename_to_original(base_directory: Path):
+    """Rename the files back to their original names, from the ranked area namings"""
     for directory in get_list_of_subdirectories(base_directory):
         csvs = [
             csv
@@ -318,12 +334,19 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Force the generation of CSV files even if they already exist.",
     )
+    parser.add_argument(
+        "--sort_by_area",
+        action="store_true",
+        help="Rename the files in all the experiments to be ascending numbers based on their mask area",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    create_rename_translation(base_directory=args.base_directory)
-    rename_to_ranked(base_directory=args.base_directory)
-    # create_csvs(base_directory=args.base_directory, force_update=args.force_update)
-    # plot_data(args.base_directory)
+    if args.sort_by_area:
+        create_rename_translation(base_directory=args.base_directory)
+        rename_to_ranked(base_directory=args.base_directory)
+    else:
+        create_csvs(base_directory=args.base_directory, force_update=args.force_update)
+        plot_data(args.base_directory)

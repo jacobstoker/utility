@@ -1,1 +1,3 @@
 skipped_folders.log
+Data
+test_data/**/*.csv
